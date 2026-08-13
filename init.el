@@ -1,91 +1,228 @@
-;; setting up other custom command related
+;; -------------------------
+;; Package setup
+;; -------------------------
+(require 'package)
+(setq package-archives
+      '(("melpa" . "https://melpa.org/packages/")
+        ("gnu"   . "https://elpa.gnu.org/packages/")))
 
-(if (equal system-type 'windows-nt)
-    (load "c:/Programming/.config/emacs/.emacs.rc/rc.el")
-  (load "/mnt/c/Programming/.config/emacs/.emacs.rc/rc.el"))
+;;(add-to-list 'package-archives `("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
 
-;; Cleaning some things from ui to look minimal
+(unless package-archive-contents
+  (package-refresh-contents))
+
+(unless (package-installed-p 'use-package)
+  (package-install 'use-package))
+
+(require 'use-package)
+(setq use-package-always-ensure t)
+
+;; -------------------------
+;; Performance tuning
+;; -------------------------
+(setq gc-cons-threshold (* 50 1000 1000))
+(setq read-process-output-max (* 1024 1024)) ;; 1MB for LSP
+
+;; -------------------------
+;; UI / UX
+;; -------------------------
 (setq inhibit-startup-message t)
-
-(scroll-bar-mode -1)
-(tool-bar-mode -1)
-(tooltip-mode -1)
-(set-fringe-mode 10)
-(menu-bar-mode -1)
-
-;; line no in emacs
-(global-display-line-numbers-mode nil)
-
-(cua-mode -1)
-;;(set-face-attribute 'default nil :height 130)
-(require 'org-tempo)
-
-;; enabling org mode
-
-(require 'org)
-
-;; changing the startup directory for emacs
-(if (equal system-type 'windows-nt)
-    (setq default-directory "c:/Programming/")
-(setq default-directory default-directory))
-
-;; ignoring different bell sounds for notifying user
+(global-display-line-numbers-mode 1)
+(column-number-mode 1)
 (setq ring-bell-function 'ignore)
 
-;; Configuring theme and font for a frame (can be treated as window in modern desktop environment
-(rc/require-theme 'gruber-darker)
 
-(setq frame-inhibit-implied-resize t)
+;; Font/Theme
+(use-package gruber-darker-theme
+  :config
+  (load-theme 'gruber-darker t))
 
-;; setting up font for the frames
-(add-to-list 'default-frame-alist
-	     `(font . "Iosevka-20"))
 
-;; configuring org mode to recognize different language using org babel loader
-(org-babel-do-load-languages 'org-babel-load-languages '((python . t)))
+;; Better scrolling
+(setq scroll-conservatively 101)
+(setq scroll-margin 8)
+;; -------------------------
+;; Completion (modern stack)
+;; -------------------------
 
-;; keeping track of recently opened files
-(require 'recentf)
-(recentf-mode 1)
-(ido-mode 1)
+(use-package vertico
+  :init
+  (vertico-mode))
 
-(defun ido-recentf-open ()
-  "Use `ido-completing-read' to find a recent file."
+(use-package orderless
+  :custom
+  (completion-styles '(orderless basic)))
+
+(use-package marginalia
+  :init
+  (marginalia-mode))
+
+(use-package corfu
+  :init
+  (global-corfu-mode)
+  :custom
+  (corfu-auto t)
+  (corfu-cycle t))
+
+;; -------------------------
+;; Key discovery
+;; -------------------------
+(use-package which-key
+  :init
+  (which-key-mode))
+
+;; -------------------------
+;; Project management
+;; -------------------------
+(use-package project
+  :ensure nil)
+
+;; -------------------------
+;; Git (Magit)
+;; -------------------------
+(use-package magit)
+
+;; -------------------------
+;; Go Development
+;; -------------------------
+(use-package go-mode
+  :hook ((go-mode . (lambda ()
+                      (setq tab-width 4)
+                      (add-hook 'before-save-hook #'gofmt-before-save nil t)))))
+
+;; -------------------------
+;; Python
+;; -------------------------
+(use-package python
+  :ensure nil
+  :hook (python-mode . eglot-ensure))
+
+;; -------------------------
+;; JS / TS
+;; -------------------------
+(use-package typescript-mode)
+(use-package js2-mode)
+
+
+;; -------------------------
+;; LSP (Eglot - built-in)
+;; -------------------------
+(use-package eglot
+  :ensure nil
+  :hook ((go-mode . eglot-ensure)
+         (python-mode . eglot-ensure)
+         (js-mode . eglot-ensure)
+         (typescript-mode . eglot-ensure))
+  :config
+  (setq eglot-autoshutdown t))
+
+;; -------------------------
+;; Formatting
+;; -------------------------
+(use-package format-all
+  :hook ((go-mode . format-all-mode)
+         (python-mode . format-all-mode)
+         (js-mode . format-all-mode)))
+
+;; -------------------------
+;; Terminal (optional but useful)
+;; -------------------------
+(use-package vterm)
+
+;; -------------------------
+;; Better defaults
+;; -------------------------
+(setq backup-directory-alist `(("." . "~/.emacs_saves")))
+(setq auto-save-default nil)
+
+;; -------------------------
+;; Dired Buffer Mode
+;; -------------------------
+
+;; Enable auto-revert mode specifically for Dired buffers
+(add-hook 'dired-mode-hook #'auto-revert-mode)
+
+
+;; -------------------------
+;; Errors and Diagnostic
+;; -------------------------
+
+(add-hook 'eglot-managed-mode-hook #'flymake-mode)
+;; Navigate errors
+(global-set-key (kbd "M-g n") 'flymake-goto-next-error)
+(global-set-key (kbd "M-g p") 'flymake-goto-prev-error)
+
+;; Show diagnostics
+(global-set-key (kbd "C-c e") 'flymake-show-buffer-diagnostics)
+
+;; Quick Inline Errors
+;; (setq flymake-no-changes-timeout 0.3)
+
+;; -------------------------
+;; Custom Commands, Modes and Keybindings
+;; -------------------------
+
+;; Adding `/path/to/simpc` to load-path so `require` can find it
+(add-to-list 'load-path "/home/ritik/.emacs.d/custom")
+;; Importing simpc-mode
+(require 'simpc-mode)
+;; Automatically enabling simpc-mode on files with extensions like .h, .c, .cpp, .hpp
+(add-to-list 'auto-mode-alist '("\\.[hc]\\(pp\\)?\\'" . simpc-mode))
+
+
+;; Adding erlang mode for emacs
+(setq load-path (cons  "/usr/local/lib/erlang/lib/tools-4.2.1/emacs"
+load-path))
+(setq erlang-root-dir "/usr/local/lib/erlang")
+(setq exec-path (cons "/usr/local/lib/erlang/bin" exec-path))
+(require 'erlang-start)
+
+;; For moving a region or line up and down
+(require 'move-lines)
+(move-lines-binding)
+
+(defun my/comment-line-or-region ()
   (interactive)
-  (if (find-file (ido-completing-read "Find recent file: " recentf-list))
-      (message "Opening file...")
-    (message "Aborting")))
-
-(global-set-key (kbd "C-c o") 'ido-recentf-open)
-(global-set-key (kbd "C-c r") 'recentf-open-files)
-
-;; saving history typed/entered into different mini buffers
-
-(setq history-length 20)
-(savehist-mode 1)
-
-;; cursor to the last place in the file that you opened
-(save-place-mode 0)
+  (if (use-region-p)
+      (comment-or-uncomment-region (region-beginning) (region-end))
+    (comment-or-uncomment-region (line-beginning-position)
+                                 (line-end-position))))
+(global-set-key (kbd "C-c C-c") 'my/comment-line-or-region)
 
 
-;; to avoid emacs to place the customize variables to your personal config files ( like while using some package that tries to edit config files)
+;; -------------------------
+;; Keybindings (Emacs-native)
+;; -------------------------
 
-(setq custom-file "c:/Programming/.config/emacs/custom.el")
+;; Faster buffer switching
+(global-set-key (kbd "C-x b") 'switch-to-buffer)
 
-;; DIRED BUFFER RELATED CONFIG
-;; jumping to dired buffer easily
-(global-set-key (kbd "C-c j") 'dired-jump)
-(global-set-key (kbd "C-c n") 'dired-create-empty-file)
+;; Kill current buffer
+(global-set-key (kbd "C-x k") 'kill-current-buffer)
 
-;; jumping between buffers back and forth
+;; Project search
+(global-set-key (kbd "C-c p f") 'project-find-file)
+(global-set-key (kbd "C-c p s") 'project-find-regexp)
 
-(defun er-switch-to-previous-buffer ()
-  "Switch to previously open buffer. Repeated invocations toggle between the two most recently open buffers."
-  (interactive)
-  (switch-to-buffer (other-buffer (current-buffer) 1)))
+;; Magit
+(global-set-key (kbd "C-x g") 'magit-status)
 
-(global-set-key (kbd "C-c p") 'er-switch-to-previous-buffer)
-(global-set-key (kbd "C-c b") 'buffer-menu-other-window)
+;; LSP useful bindings
+(global-set-key (kbd "M-.") 'xref-find-definitions)
+(global-set-key (kbd "M-?") 'xref-find-references)
+(global-set-key (kbd "C-c r") 'eglot-rename)
 
-;; opening compile mode
-(global-set-key (kbd "C-c SPC") 'compile)
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages nil))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
